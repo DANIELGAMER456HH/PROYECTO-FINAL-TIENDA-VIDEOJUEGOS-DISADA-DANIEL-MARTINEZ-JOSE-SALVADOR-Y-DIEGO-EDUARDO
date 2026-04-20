@@ -1,0 +1,371 @@
+import 'package:flutter/material.dart';
+import 'package:game_vault/models/game.dart';
+import 'package:game_vault/services/game_storage.dart';
+import 'package:game_vault/widgets/game_card.dart';
+
+/// Pantalla que muestra todos los juegos favoritos del usuario
+///
+/// Características:
+/// - Muestra juegos guardados como favoritos
+/// - Permite remover de favoritos
+/// - Acceso rápido a detalles del juego
+/// - Opción de limpiar todos los favoritos
+class FavoritesScreen extends StatefulWidget {
+  const FavoritesScreen({Key? key}) : super(key: key);
+
+  @override
+  State<FavoritesScreen> createState() => _FavoritesScreenState();
+}
+
+class _FavoritesScreenState extends State<FavoritesScreen> {
+  /// Servicio de almacenamiento
+  final GameStorage _gameStorage = GameStorage();
+
+  /// Lista de juegos favoritos (convertida a Game)
+  List<Game> _favorites = [];
+
+  /// Indicador de carga
+  bool _isLoading = true;
+
+  /// Ordenamiento actual
+  String _sortBy = 'name'; // 'name', 'rating', 'year'
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFavorites();
+  }
+
+  /// Carga los favoritos desde Hive
+  Future<void> _loadFavorites() async {
+    try {
+      final favoriteGames = await _gameStorage.getFavoritesGames();
+
+      // Convertir FavoriteGame a Game
+      final games = favoriteGames.map((fav) {
+        return Game(
+          id: fav?.id ?? 0,
+          name: fav?.name ?? '',
+          imageUrl: fav?.imageUrl ?? '',
+          rating: fav?.rating ?? 0.0,
+          description: fav?.description ?? '',
+          isFavorite: true,
+          releaseYear: fav?.releaseYear ?? 0,
+          genres: fav?.genres ?? '',
+          price: fav?.price ?? 0.0,
+        );
+      }).toList();
+
+      // Aplicar ordenamiento
+      _applySort(games);
+
+      setState(() {
+        _favorites = games;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('❌ Error cargando favoritos: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// Aplica el ordenamiento a la lista
+  void _applySort(List<Game> games) {
+    switch (_sortBy) {
+      case 'rating':
+        games.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case 'year':
+        games.sort((a, b) => b.releaseYear.compareTo(a.releaseYear));
+        break;
+      case 'name':
+      default:
+        games.sort((a, b) => a.name.compareTo(b.name));
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  /// Elimina un juego de favoritos
+  Future<void> _removeFavorite(Game game) async {
+    try {
+      await _gameStorage.removeFavorite(game.id);
+      setState(() {
+        _favorites.removeWhere((g) => g.id == game.id);
+      });
+      _showMessage('${game.name} removido de favoritos', Colors.orange);
+    } catch (e) {
+      _showMessage('Error: $e', Colors.red);
+    }
+  }
+
+  /// Limpia todos los favoritos
+  Future<void> _clearAllFavorites() async {
+    // Mostrar diálogo de confirmación
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Limpiar favoritos'),
+        content: Text(
+          '¿Estás seguro que deseas eliminar los ${_favorites.length} juegos favoritos?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Eliminar todos los favoritos
+      for (var game in _favorites) {
+        await _gameStorage.removeFavorite(game.id);
+      }
+
+      setState(() {
+        _favorites.clear();
+      });
+      _showMessage('Todos los favoritos han sido eliminados', Colors.green);
+    } catch (e) {
+      _showMessage('Error: $e', Colors.red);
+    }
+  }
+
+  /// Muestra un mensaje temporal
+  void _showMessage(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('❤️ Mis Favoritos'),
+        elevation: 0,
+        actions: [
+          if (_favorites.isNotEmpty)
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'clear') {
+                  _clearAllFavorites();
+                } else {
+                  setState(() {
+                    _sortBy = value;
+                    _applySort(_favorites);
+                  });
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'name',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.sort_by_alpha),
+                      const SizedBox(width: 8),
+                      const Text('Ordenar por Nombre'),
+                      if (_sortBy == 'name')
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(Icons.check, color: Color(0xFF00D9FF)),
+                        ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'rating',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.star),
+                      const SizedBox(width: 8),
+                      const Text('Ordenar por Calificación'),
+                      if (_sortBy == 'rating')
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(Icons.check, color: Color(0xFF00D9FF)),
+                        ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'year',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today),
+                      const SizedBox(width: 8),
+                      const Text('Ordenar por Año'),
+                      if (_sortBy == 'year')
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(Icons.check, color: Color(0xFF00D9FF)),
+                        ),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'clear',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.delete_sweep, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text(
+                        'Limpiar Todos',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _favorites.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.favorite_border,
+                    size: 64,
+                    color: Colors.grey[600],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Sin favoritos',
+                    style: TextStyle(color: Colors.grey, fontSize: 18),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Agrega juegos a tus favoritos para verlos aquí',
+                    style: TextStyle(color: Colors.grey[400]),
+                  ),
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                // ========== INFORMACIÓN ==========
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[900],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.favorite, color: Colors.red, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Total de Favoritos',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(color: Colors.white),
+                            ),
+                            Text(
+                              '${_favorites.length} ${_favorites.length == 1 ? 'juego' : 'juegos'} en tu colección',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[400],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Calcular promedio de calificación
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            (_favorites.fold<double>(
+                                      0,
+                                      (sum, game) => sum + game.rating,
+                                    ) /
+                                    _favorites.length)
+                                .toStringAsFixed(1),
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  color: const Color(0xFF00D9FF),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          Text(
+                            'Promedio',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[400],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ========== LISTA DE FAVORITOS ==========
+                Expanded(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.6,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                    itemCount: _favorites.length,
+                    itemBuilder: (context, index) {
+                      final game = _favorites[index];
+                      return GameCard(
+                        game: game.copyWith(isFavorite: true),
+                        onTap: () {
+                          Navigator.pushNamed(
+                            context,
+                            '/game-detail',
+                            arguments: game.id,
+                          );
+                        },
+                        onFavoriteToggle: (newState) {
+                          if (!newState) {
+                            _removeFavorite(game);
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+    );
+  }
+}

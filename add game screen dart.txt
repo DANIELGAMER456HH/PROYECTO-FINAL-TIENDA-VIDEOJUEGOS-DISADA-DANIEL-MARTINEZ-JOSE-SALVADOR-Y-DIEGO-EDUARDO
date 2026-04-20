@@ -1,0 +1,678 @@
+import 'package:flutter/material.dart';
+import 'package:game_vault/constants/app_constants.dart';
+
+/// Pantalla de Tienda de Videojuegos
+class AddGameScreen extends StatefulWidget {
+  const AddGameScreen({Key? key}) : super(key: key);
+
+  @override
+  State<AddGameScreen> createState() => _AddGameScreenState();
+}
+
+class _AddGameScreenState extends State<AddGameScreen> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _searchController;
+  late TextEditingController _nameController;
+  late TextEditingController _ageController;
+  late TextEditingController _emailController;
+  late TextEditingController _phoneController;
+  late TextEditingController _cityController;
+
+  List<Map<String, dynamic>> _searchResults = [];
+  List<Map<String, dynamic>> _selectedGames = [];
+  bool _isLoading = false;
+  double _totalPrice = 0.0;
+
+  static const List<Map<String, String>> _defaultGames = [
+    // Acción y Aventura
+    {
+      'name': 'The Legend of Zelda: Ocarina of Time',
+      'category': 'Acción y Aventura',
+    },
+    {'name': 'The Last of Us', 'category': 'Acción y Aventura'},
+    {'name': 'Grand Theft Auto V', 'category': 'Acción y Aventura'},
+    {'name': 'Red Dead Redemption 2', 'category': 'Acción y Aventura'},
+    {'name': 'God of War (2018)', 'category': 'Acción y Aventura'},
+    {'name': 'Super Mario Odyssey', 'category': 'Acción y Aventura'},
+    {'name': 'Tomb Raider (2013)', 'category': 'Acción y Aventura'},
+    {'name': 'Batman: Arkham City', 'category': 'Acción y Aventura'},
+    {'name': 'Uncharted 4: A Thief\'s End', 'category': 'Acción y Aventura'},
+    {'name': 'Horizon Zero Dawn', 'category': 'Acción y Aventura'},
+    // Juegos de Rol (RPG)
+    {'name': 'The Witcher 3: Wild Hunt', 'category': 'RPG'},
+    {'name': 'Final Fantasy VII', 'category': 'RPG'},
+    {'name': 'The Elder Scrolls V: Skyrim', 'category': 'RPG'},
+    {'name': 'Mass Effect 2', 'category': 'RPG'},
+    {'name': 'Persona 5 Royal', 'category': 'RPG'},
+    {'name': 'Chrono Trigger', 'category': 'RPG'},
+    {'name': 'Dark Souls', 'category': 'RPG'},
+    {'name': 'Fallout: New Vegas', 'category': 'RPG'},
+    {'name': 'Baldur\'s Gate 3', 'category': 'RPG'},
+    {'name': 'Cyberpunk 2077', 'category': 'RPG'},
+    // Disparos (Shooters)
+    {'name': 'DOOM (1993)', 'category': 'Shooter'},
+    {'name': 'Half-Life 2', 'category': 'Shooter'},
+    {'name': 'Halo: Combat Evolved', 'category': 'Shooter'},
+    {'name': 'Call of Duty: Modern Warfare 2', 'category': 'Shooter'},
+    {'name': 'Overwatch', 'category': 'Shooter'},
+    {'name': 'BioShock', 'category': 'Shooter'},
+    {'name': 'Destiny 2', 'category': 'Shooter'},
+    {'name': 'Counter-Strike: Global Offensive', 'category': 'Shooter'},
+    {'name': 'GoldenEye 007', 'category': 'Shooter'},
+    {'name': 'Gears of War', 'category': 'Shooter'},
+    // Plataformas
+    {'name': 'Super Mario Bros.', 'category': 'Plataforma'},
+    {'name': 'Sonic the Hedgehog', 'category': 'Plataforma'},
+    {'name': 'Donkey Kong Country', 'category': 'Plataforma'},
+    {'name': 'Crash Bandicoot', 'category': 'Plataforma'},
+    {'name': 'Celeste', 'category': 'Plataforma'},
+    {'name': 'Hollow Knight', 'category': 'Plataforma'},
+    {'name': 'Super Mario 64', 'category': 'Plataforma'},
+    {'name': 'Rayman Legends', 'category': 'Plataforma'},
+    {'name': 'Mega Man 2', 'category': 'Plataforma'},
+    {'name': 'Ori and the Blind Forest', 'category': 'Plataforma'},
+    // Estrategia y Simulación
+    {'name': 'Age of Empires II', 'category': 'Estrategia'},
+    {'name': 'StarCraft', 'category': 'Estrategia'},
+    {'name': 'Civilization VI', 'category': 'Estrategia'},
+    {'name': 'The Sims 4', 'category': 'Simulación'},
+    {'name': 'SimCity', 'category': 'Simulación'},
+    {'name': 'XCOM: Enemy Unknown', 'category': 'Estrategia'},
+    {'name': 'RollerCoaster Tycoon', 'category': 'Simulación'},
+    {'name': 'Stardew Valley', 'category': 'Simulación'},
+    {'name': 'Animal Crossing: New Horizons', 'category': 'Simulación'},
+    {'name': 'Crusader Kings III', 'category': 'Estrategia'},
+    // Deportes y Carreras
+    {'name': 'EA Sports FC 24', 'category': 'Deportes'},
+    {'name': 'Mario Kart 8 Deluxe', 'category': 'Carreras'},
+    {'name': 'Forza Horizon 5', 'category': 'Carreras'},
+    {'name': 'Gran Turismo 7', 'category': 'Carreras'},
+    {'name': 'Rocket League', 'category': 'Deportes'},
+    {'name': 'Tony Hawk\'s Pro Skater 2', 'category': 'Deportes'},
+    {'name': 'NBA 2K23', 'category': 'Deportes'},
+    {'name': 'Need for Speed: Most Wanted', 'category': 'Carreras'},
+    {'name': 'Wii Sports', 'category': 'Deportes'},
+    {'name': 'SSX Tricky', 'category': 'Deportes'},
+    // Lucha (Fighting)
+    {'name': 'Street Fighter II', 'category': 'Lucha'},
+    {'name': 'Super Smash Bros. Ultimate', 'category': 'Lucha'},
+    {'name': 'Mortal Kombat 11', 'category': 'Lucha'},
+    {'name': 'Tekken 3', 'category': 'Lucha'},
+    {'name': 'Dragon Ball FighterZ', 'category': 'Lucha'},
+    {'name': 'Soulcalibur', 'category': 'Lucha'},
+    {'name': 'Injustice 2', 'category': 'Lucha'},
+    {'name': 'Marvel vs. Capcom 2', 'category': 'Lucha'},
+    {'name': 'Guilty Gear Strive', 'category': 'Lucha'},
+    {'name': 'The King of Fighters \'98', 'category': 'Lucha'},
+    // Indies y Roguelikes
+    {'name': 'Hades', 'category': 'Indie'},
+    {'name': 'Undertale', 'category': 'Indie'},
+    {'name': 'Minecraft', 'category': 'Sandbox'},
+    {'name': 'Terraria', 'category': 'Sandbox'},
+    {'name': 'Dead Cells', 'category': 'Indie'},
+    {'name': 'Spelunky', 'category': 'Indie'},
+    {'name': 'The Binding of Isaac', 'category': 'Indie'},
+    {'name': 'Cuphead', 'category': 'Indie'},
+    {'name': 'Shovel Knight', 'category': 'Indie'},
+    {'name': 'Slay the Spire', 'category': 'Indie'},
+    // Terror y Supervivencia
+    {'name': 'Resident Evil 4', 'category': 'Terror'},
+    {'name': 'Silent Hill 2', 'category': 'Terror'},
+    {'name': 'Amnesia: The Dark Descent', 'category': 'Terror'},
+    {'name': 'Dead Space', 'category': 'Terror'},
+    {'name': 'Outlast', 'category': 'Terror'},
+    {'name': 'Alien: Isolation', 'category': 'Terror'},
+    {'name': 'The Evil Within', 'category': 'Terror'},
+    {'name': 'Five Nights at Freddy\'s', 'category': 'Terror'},
+    {'name': 'Resident Evil 2 Remake', 'category': 'Terror'},
+    {'name': 'Phasmophobia', 'category': 'Terror'},
+    // Puzles y Familiares
+    {'name': 'Tetris', 'category': 'Puzzle'},
+    {'name': 'Portal 2', 'category': 'Puzzle'},
+    {'name': 'Pac-Man', 'category': 'Arcade'},
+    {'name': 'Among Us', 'category': 'Social'},
+    {'name': 'Fall Guys', 'category': 'Party'},
+    {'name': 'Overcooked! 2', 'category': 'Party'},
+    {'name': 'Mario Party Superstars', 'category': 'Party'},
+    {'name': 'Candy Crush Saga', 'category': 'Puzzle'},
+    {'name': 'Bejeweled', 'category': 'Puzzle'},
+    {'name': 'The Witness', 'category': 'Puzzle'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _nameController = TextEditingController();
+    _ageController = TextEditingController();
+    _emailController = TextEditingController();
+    _phoneController = TextEditingController();
+    _cityController = TextEditingController();
+    _loadPopularGames();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _nameController.dispose();
+    _ageController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _cityController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadPopularGames() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      // Convertir la lista de juegos predeterminada con precios
+      final games = _defaultGames.asMap().entries.map((entry) {
+        final index = entry.key;
+        final game = entry.value;
+        return {
+          'id': index,
+          'name': game['name'],
+          'category': game['category'],
+          'price': 199.00 + (index * 12),
+          'image':
+              'https://images.unsplash.com/photo-1552820728-8ac41f1ce891?w=300&h=300',
+          'rating': 4.0 + (index % 10) * 0.1,
+        };
+      }).toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        _searchResults = games;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _searchGames(String query) async {
+    if (query.isEmpty) {
+      _loadPopularGames();
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      // Filtrar de la lista local por nombre o categoría
+      final lowerQuery = query.toLowerCase();
+      final filtered = _defaultGames
+          .asMap()
+          .entries
+          .where((entry) {
+            final game = entry.value;
+            return game['name']!.toLowerCase().contains(lowerQuery) ||
+                game['category']!.toLowerCase().contains(lowerQuery);
+          })
+          .map((entry) {
+            final index = entry.key;
+            final game = entry.value;
+            return {
+              'id': index,
+              'name': game['name'],
+              'category': game['category'],
+              'price': 199.00 + (index * 12),
+              'image':
+                  'https://images.unsplash.com/photo-1552820728-8ac41f1ce891?w=300&h=300',
+              'rating': 4.0 + (index % 10) * 0.1,
+            };
+          })
+          .toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        _searchResults = filtered;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _toggleGameSelection(Map<String, dynamic> game) {
+    setState(() {
+      final isSelected = _selectedGames.any((g) => g['id'] == game['id']);
+      if (isSelected) {
+        _selectedGames.removeWhere((g) => g['id'] == game['id']);
+        _totalPrice -= game['price'] as double;
+      } else {
+        _selectedGames.add(game);
+        _totalPrice += game['price'] as double;
+      }
+    });
+  }
+
+  bool _isGameSelected(int gameId) {
+    return _selectedGames.any((game) => game['id'] == gameId);
+  }
+
+  List<Widget> _buildCategorySections() {
+    // Agrupar juegos por categoría
+    final Map<String, List<Map<String, dynamic>>> categorizedGames = {};
+
+    for (final game in _searchResults) {
+      final category = game['category'] as String? ?? 'Otros';
+      categorizedGames.putIfAbsent(category, () => []).add(game);
+    }
+
+    // Orden de categorías
+    final categoryOrder = [
+      'Acción y Aventura',
+      'RPG',
+      'Shooter',
+      'Plataforma',
+      'Estrategia',
+      'Simulación',
+      'Deportes',
+      'Carreras',
+      'Lucha',
+      'Indie',
+      'Sandbox',
+      'Terror',
+      'Puzzle',
+      'Arcade',
+      'Social',
+      'Party',
+      'Otros',
+    ];
+
+    final widgets = <Widget>[];
+
+    for (final category in categoryOrder) {
+      if (categorizedGames.containsKey(category) &&
+          categorizedGames[category]!.isNotEmpty) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 16.0,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  category,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: categorizedGames[category]!.length,
+                    itemBuilder: (context, index) {
+                      final game = categorizedGames[category]![index];
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _buildGameCard(game),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    }
+
+    return widgets;
+  }
+
+  Widget _buildGameCard(Map<String, dynamic> game) {
+    final isSelected = _isGameSelected(game['id'] as int);
+
+    return GestureDetector(
+      onTap: () => _toggleGameSelection(game),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppConstants.accentColor : Colors.grey[700]!,
+            width: isSelected ? 2 : 1,
+          ),
+          color: isSelected ? Colors.grey[850] : Colors.grey[900],
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(10),
+                    topRight: Radius.circular(10),
+                  ),
+                  image: DecorationImage(
+                    image: NetworkImage(
+                      game['image'] as String? ??
+                          'https://via.placeholder.com/300',
+                    ),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                child: Stack(
+                  alignment: Alignment.topRight,
+                  children: [
+                    if (isSelected)
+                      Container(
+                        width: 40,
+                        height: 40,
+                        margin: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppConstants.accentColor,
+                        ),
+                        child: const Icon(
+                          Icons.check,
+                          color: Colors.black,
+                          size: 20,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    game['name'] as String,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '\$${(game['price'] as num).toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: AppConstants.accentColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, size: 12, color: Colors.amber),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${(game['rating'] as num).toStringAsFixed(1)}',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _processPurchase() {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedGames.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona al menos un juego')),
+      );
+      return;
+    }
+
+    Navigator.of(context).pushNamed(
+      '/payment',
+      arguments: {
+        'selectedGames': _selectedGames,
+        'customerName': _nameController.text,
+        'customerEmail': _emailController.text,
+        'customerPhone': _phoneController.text,
+        'customerCity': _cityController.text,
+        'totalItems': _selectedGames.length,
+        'totalPrice': _totalPrice,
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('🛍️ Tienda de Videojuegos'),
+        elevation: 0,
+        backgroundColor: AppConstants.primaryDarkColor,
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // ============ FORMULARIO ARRIBA ============
+            Container(
+              color: Colors.grey[900],
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ℹ️ Información del Cliente',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTextField(_nameController, 'Nombre', Icons.person),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      _ageController,
+                      'Edad',
+                      Icons.cake,
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      _emailController,
+                      'Email',
+                      Icons.email,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      _phoneController,
+                      'Teléfono',
+                      Icons.phone,
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      _cityController,
+                      'Ciudad',
+                      Icons.location_city,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ============ RESUMEN ============
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.grey[850],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Juegos seleccionados:',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                          Text(
+                            '${_selectedGames.length}',
+                            style: TextStyle(
+                              color: AppConstants.accentColor,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text(
+                            'Total a pagar:',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                          Text(
+                            '\$${_totalPrice.toStringAsFixed(2)} MXN',
+                            style: TextStyle(
+                              color: AppConstants.accentColor,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _selectedGames.isEmpty ? null : _processPurchase,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppConstants.accentColor,
+                      disabledBackgroundColor: Colors.grey[600],
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      _selectedGames.isEmpty
+                          ? 'Selecciona juegos para continuar'
+                          : 'Proceder al Pago',
+                      style: TextStyle(
+                        color: _selectedGames.isEmpty
+                            ? Colors.grey
+                            : Colors.black,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const Divider(color: Colors.grey),
+
+            // ============ BÚSQUEDA Y JUEGOS ABAJO ============
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _searchGames,
+                decoration: InputDecoration(
+                  hintText: 'Buscar juegos...',
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: AppConstants.accentColor,
+                  ),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            _loadPopularGames();
+                          },
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[900],
+                ),
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+
+            // JUEGOS EN CUADRADOS
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.all(32.0),
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation(AppConstants.accentColor),
+                ),
+              )
+            else if (_searchResults.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 64.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.search_off, size: 64, color: Colors.grey[600]),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No se encontraron juegos',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [..._buildCategorySections()],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    TextInputType? keyboardType,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      validator: (value) => value == null || value.isEmpty ? 'Requerido' : null,
+    );
+  }
+}

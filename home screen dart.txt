@@ -1,0 +1,568 @@
+import 'package:flutter/material.dart';
+import 'package:game_vault/models/game.dart';
+import 'package:game_vault/services/api_service.dart';
+import 'package:game_vault/services/game_storage.dart';
+import 'package:game_vault/widgets/game_card.dart';
+
+/// Pantalla de inicio de la aplicación
+///
+/// Muestra:
+/// - Bienvenida al usuario
+/// - Botones de navegación a las secciones principales
+/// - Vista previa de juegos populares
+/// - Estadísticas del usuario
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({Key? key}) : super(key: key);
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  /// Servicio para consumir la API
+  final ApiService _apiService = ApiService();
+
+  /// Servicio para almacenamiento local
+  final GameStorage _gameStorage = GameStorage();
+
+  /// Lista de juegos populares
+  List<Game> _popularGames = [];
+
+  /// Indicador de carga
+  bool _isLoading = true;
+
+  /// Número de juegos favoritos
+  int _favoritesCount = 0;
+
+  /// Controladores de animaciones
+  late AnimationController _slideAnimation;
+  late AnimationController _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Inicializar StorageService
+    _initializeStorage();
+
+    // Configurar animaciones
+    _slideAnimation = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _fadeAnimation = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    // Iniciar animaciones
+    _slideAnimation.forward();
+    _fadeAnimation.forward();
+
+    // Cargar datos
+    _loadData();
+  }
+
+  /// Inicializa el servicio de almacenamiento
+  Future<void> _initializeStorage() async {
+    try {
+      await _gameStorage.init();
+      print('✅ Almacenamiento inicializado');
+    } catch (e) {
+      print('❌ Error inicializando almacenamiento: $e');
+    }
+  }
+
+  /// Carga los datos iniciales
+  Future<void> _loadData() async {
+    try {
+      // Cargar juegos populares
+      final games = await _apiService.getPopularGames(pageSize: 5);
+
+      // Cargar contador de favoritos
+      final favorites = await _gameStorage.getFavoritesGames();
+
+      setState(() {
+        _popularGames = games;
+        _favoritesCount = favorites.length;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('❌ Error cargando datos: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// Navega a la pantalla de lista de juegos
+  void _goToGamesList() {
+    Navigator.pushNamed(context, '/games');
+  }
+
+  /// Navega a la pantalla de favoritos
+  void _goToFavorites() {
+    Navigator.pushNamed(context, '/favorites');
+  }
+
+  /// Maneja el cambio de favorito de un juego
+  void _handleFavoriteToggle(Game game, bool isFavorite) async {
+    if (isFavorite) {
+      await _gameStorage.addFavorite(game);
+    } else {
+      await _gameStorage.removeFavorite(game.id);
+    }
+
+    // Actualizar contador
+    final favorites = await _gameStorage.getFavoritesGames();
+    setState(() {
+      _favoritesCount = favorites.length;
+    });
+  }
+
+  @override
+  void dispose() {
+    _slideAnimation.dispose();
+    _fadeAnimation.dispose();
+    _apiService.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('🎮 Videojuegos Disada'),
+        elevation: 0,
+        actions: [
+          // Botón de historial
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Tooltip(
+              message: 'Ver configuración',
+              child: IconButton(
+                icon: const Icon(Icons.info_outline),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Game Vault v1.0 - Tu gestor de videojuegos',
+                      ),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const LoadingWidget(message: 'Iniciando Game Vault...')
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ========== SECCIÓN DE BIENVENIDA ==========
+                  SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(-1, 0),
+                      end: Offset.zero,
+                    ).animate(_slideAnimation),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF1E3C72),
+                            const Color(0xFF2E5090),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '¡Bienvenido a Videojuegos Disada!',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'La mejor tienda de videojuegos en línea',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[300],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // ========== TRES OPCIONES PRINCIPALES ==========
+                  FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Column(
+                      children: [
+                        // Opción 1: Comprar un Juego
+                        _buildMainOption(
+                          icon: Icons.shopping_cart,
+                          title: '🛒 Comprar un Juego',
+                          description:
+                              'Selecciona videojuegos y compra en nuestra tienda',
+                          color: const Color(0xFF00D9FF),
+                          onTap: () {
+                            Navigator.pushNamed(context, '/add-game');
+                          },
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Opción 2: Lista de Juegos
+                        _buildMainOption(
+                          icon: Icons.search,
+                          title: '📋 Lista de Juegos',
+                          description:
+                              'Explora y busca videojuegos en nuestro catálogo',
+                          color: Colors.purple,
+                          onTap: _goToGamesList,
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Opción 3: Ver Carrito
+                        _buildMainOption(
+                          icon: Icons.favorite,
+                          title: '❤️ Mis Favoritos',
+                          description:
+                              'Visualiza tu colección de juegos favoritos ($_favoritesCount)',
+                          color: Colors.red,
+                          onTap: _goToFavorites,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // ========== ESTADÍSTICAS ==========
+                  Row(
+                    children: [
+                      // Card de Favoritos
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color:
+                                Colors.red[900]?.withOpacity(0.3) ??
+                                Colors.red.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.red[400] ?? Colors.red,
+                              width: 2,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.favorite,
+                                color: Colors.red[400],
+                                size: 32,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '$_favoritesCount',
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Favoritos',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 12),
+
+                      // Card de Juegos Totales
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00D9FF).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFF00D9FF),
+                              width: 2,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.sports_esports,
+                                color: Color(0xFF00D9FF),
+                                size: 32,
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                '∞',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF00D9FF),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Catálogo',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // ========== BOTONES SECUNDARIOS ==========
+                  SizedBox(
+                    width: double.infinity,
+                    height: 100,
+                    child: GridView.count(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [
+                        // Botón Tienda
+                        _buildNavButton(
+                          icon: Icons.store,
+                          label: 'Tienda',
+                          color: Colors.green,
+                          onTap: () {
+                            Navigator.pushNamed(context, '/store');
+                          },
+                        ),
+
+                        // Botón Información
+                        _buildNavButton(
+                          icon: Icons.info,
+                          label: 'Info',
+                          color: Colors.orange,
+                          onTap: () {
+                            _showAboutDialog();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // ========== JUEGOS POPULARES ==========
+                  Text(
+                    'Juegos Populares',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  if (_popularGames.isEmpty)
+                    const EmptyStateWidget(
+                      title: 'Sin juegos disponibles',
+                      message: 'No se pudieron cargar los juegos populares',
+                      icon: Icons.cloud_off,
+                    )
+                  else
+                    SizedBox(
+                      height: 300,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _popularGames.length,
+                        itemBuilder: (context, index) {
+                          final game = _popularGames[index];
+                          return SizedBox(
+                            width: 200,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: GameCard(
+                                game: game,
+                                onTap: () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/game-detail',
+                                    arguments: game.id,
+                                  );
+                                },
+                                onFavoriteToggle: (isFavorite) {
+                                  _handleFavoriteToggle(game, isFavorite);
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // ========== FOOTER ==========
+                  Center(
+                    child: Text(
+                      'Powered by RAWG API',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+    );
+  }
+
+  /// Construye una opción principal con estilo grande
+  Widget _buildMainOption({
+    required IconData icon,
+    required String title,
+    required String description,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color, width: 2),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 32),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, color: color, size: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Construye un botón de navegación reutilizable
+  Widget _buildNavButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color, width: 2),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 32),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Muestra un diálogo de información sobre la app
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Acerca de Game Vault'),
+        content: const Text(
+          'Game Vault v1.0\n\n'
+          'Una aplicación para gestionar tu colección de videojuegos.\n\n'
+          'Desarrollado con Flutter y Dart\n'
+          'Datos proporcionados por RAWG.io',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+}

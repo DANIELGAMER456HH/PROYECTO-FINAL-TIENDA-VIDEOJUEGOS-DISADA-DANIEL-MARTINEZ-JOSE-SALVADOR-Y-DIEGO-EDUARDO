@@ -1,0 +1,430 @@
+import 'package:flutter/material.dart';
+
+/// Pantalla de pago con opciones de efectivo o tarjeta
+///
+/// Permite al usuario elegir el método de pago y procesar la compra
+class PaymentScreen extends StatefulWidget {
+  final List<Map<String, dynamic>> selectedGames;
+  final String customerName;
+  final String customerEmail;
+  final String customerPhone;
+  final String customerCity;
+  final int totalItems;
+  final double totalPrice;
+
+  const PaymentScreen({
+    Key? key,
+    required this.selectedGames,
+    required this.customerName,
+    required this.customerEmail,
+    required this.customerPhone,
+    required this.customerCity,
+    required this.totalItems,
+    required this.totalPrice,
+  }) : super(key: key);
+
+  @override
+  State<PaymentScreen> createState() => _PaymentScreenState();
+}
+
+class _PaymentScreenState extends State<PaymentScreen> {
+  /// Método de pago seleccionado
+  String? _selectedPaymentMethod;
+
+  /// Indica si está procesando el pago
+  bool _isProcessing = false;
+
+  /// Procesa el pago y navega a pantalla de éxito
+  void _processPayment() async {
+    if (_selectedPaymentMethod == null) {
+      _showErrorSnackBar('Por favor selecciona un método de pago');
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    // Simular procesamiento de pago (2 segundos)
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (mounted) {
+      Navigator.pushReplacementNamed(
+        context,
+        '/success',
+        arguments: {
+          'customerName': widget.customerName,
+          'totalItems': widget.totalItems,
+          'paymentMethod': _selectedPaymentMethod,
+          'selectedGames': widget.selectedGames,
+          'totalPrice': widget.totalPrice,
+        },
+      );
+    }
+  }
+
+  /// Muestra un mensaje de error
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red[700],
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('💳 Método de Pago'), elevation: 0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ========== RESUMEN DE COMPRA ==========
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF00D9FF), width: 2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'RESUMEN DE COMPRA',
+                    style: TextStyle(
+                      color: Color(0xFF00D9FF),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Lista de juegos con precios
+                  ...widget.selectedGames.map((game) {
+                    final gameName = game['name'] as String;
+                    final price = game['price'] as double;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              gameName,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            '\$${price.toStringAsFixed(2)} MXN',
+                            style: const TextStyle(
+                              color: Color(0xFF00D9FF),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+
+                  const Divider(
+                    color: Color(0xFF00D9FF),
+                    height: 16,
+                  ),
+
+                  // Total
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'TOTAL A PAGAR:',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        '\$${widget.totalPrice.toStringAsFixed(2)} MXN',
+                        style: const TextStyle(
+                          color: Color(0xFF00D9FF),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Cliente:',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      Text(
+                        widget.customerName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Email:',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      Text(
+                        widget.customerEmail,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Ciudad:',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      Text(
+                        widget.customerCity,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ========== MÉTODO DE PAGO ==========
+            const Text(
+              'SELECCIONA MÉTODO DE PAGO',
+              style: TextStyle(
+                color: Color(0xFF00D9FF),
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Opción: Efectivo
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedPaymentMethod = 'cash';
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[900],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _selectedPaymentMethod == 'cash'
+                        ? const Color(0xFF00D9FF)
+                        : Colors.grey[700]!,
+                    width: _selectedPaymentMethod == 'cash' ? 3 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _selectedPaymentMethod == 'cash'
+                              ? const Color(0xFF00D9FF)
+                              : Colors.grey[500]!,
+                          width: 2,
+                        ),
+                      ),
+                      child: _selectedPaymentMethod == 'cash'
+                          ? const Center(
+                              child: Icon(
+                                Icons.check,
+                                color: Color(0xFF00D9FF),
+                                size: 14,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    const Icon(
+                      Icons.local_atm,
+                      color: Color(0xFF00D9FF),
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Pago en Efectivo',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Paga en tienda al retirar',
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Opción: Tarjeta
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedPaymentMethod = 'card';
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[900],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _selectedPaymentMethod == 'card'
+                        ? const Color(0xFF00D9FF)
+                        : Colors.grey[700]!,
+                    width: _selectedPaymentMethod == 'card' ? 3 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _selectedPaymentMethod == 'card'
+                              ? const Color(0xFF00D9FF)
+                              : Colors.grey[500]!,
+                          width: 2,
+                        ),
+                      ),
+                      child: _selectedPaymentMethod == 'card'
+                          ? const Center(
+                              child: Icon(
+                                Icons.check,
+                                color: Color(0xFF00D9FF),
+                                size: 14,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    const Icon(
+                      Icons.credit_card,
+                      color: Color(0xFF00D9FF),
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Pago con Tarjeta',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Débito, Crédito o Transferencia',
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ========== BOTÓN DE PAGO ==========
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isProcessing ? null : _processPayment,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00D9FF),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  disabledBackgroundColor: Colors.grey[700],
+                ),
+                child: _isProcessing
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.black,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Procesando pago...'),
+                        ],
+                      )
+                    : const Text(
+                        'FINALIZAR PAGO',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -1,0 +1,439 @@
+import 'package:flutter/material.dart';
+import 'package:game_vault/models/game.dart';
+import 'package:game_vault/services/api_service.dart';
+import 'package:game_vault/services/game_storage.dart';
+import 'package:game_vault/widgets/game_card.dart' as game_widgets;
+
+/// Pantalla de detalle del videojuego
+///
+/// Muestra información completa del juego:++
+/// - Imagen grande
+/// - Nombre y calificación
+/// - Descripción
+/// - Géneros y año de lanzamiento
+/// - Botón para agregar/remover de favoritos
+/// - Botón para compartir
+class GameDetailScreen extends StatefulWidget {
+  /// ID del juego a mostrar
+  final int gameId;
+
+  const GameDetailScreen({Key? key, required this.gameId}) : super(key: key);
+
+  @override
+  State<GameDetailScreen> createState() => _GameDetailScreenState();
+}
+
+class _GameDetailScreenState extends State<GameDetailScreen>
+    with TickerProviderStateMixin {
+  /// Servicio de API
+  final ApiService _apiService = ApiService();
+
+  /// Servicio de storage
+  final GameStorage _gameStorage = GameStorage();
+
+  /// Datos del juego
+  Game? _game;
+
+  /// Indicador de carga
+  bool _isLoading = true;
+
+  /// Si el juego está en favoritos
+  bool _isFavorite = false;
+
+  /// Controlador de animación para el botón flotante
+  late AnimationController _fabAnimationController;
+
+  /// Animación scroll
+  late ScrollController _scrollController;
+
+  /// Opacidad del AppBar
+  double _appBarOpacity = 0;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _fabAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+
+    _scrollController = ScrollController();
+    _scrollController.addListener(_handleScroll);
+
+    _initializeStorage();
+    _loadGameDetails();
+  }
+
+  /// Maneja el scroll para cambiar la opacidad del AppBar
+  void _handleScroll() {
+    setState(() {
+      _appBarOpacity = (_scrollController.offset / 200).clamp(0, 1);
+    });
+  }
+
+  /// Inicializa el almacenamiento
+  Future<void> _initializeStorage() async {
+    try {
+      await _gameStorage.init();
+    } catch (e) {
+      print('❌ Error inicializando almacenamiento: $e');
+    }
+  }
+
+  /// Carga los detalles del juego
+  Future<void> _loadGameDetails() async {
+    try {
+      final game = await _apiService.getGameDetails(widget.gameId);
+
+      // Verificar si está en favoritos
+      final isFavorite = await _gameStorage.isFavorite(game.id);
+
+      // Agregar al historial
+      await _gameStorage.addToHistory(game);
+
+      setState(() {
+        _game = game;
+        _isFavorite = isFavorite;
+        _isLoading = false;
+      });
+
+      // Reproducir animación
+      _fabAnimationController.forward();
+    } catch (e) {
+      print('❌ Error cargando detalles: $e');
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+      }
+    }
+  }
+
+  /// Alterna el estado de favorito
+  Future<void> _toggleFavorite() async {
+    if (_game == null) return;
+
+    try {
+      if (_isFavorite) {
+        await _gameStorage.removeFavorite(_game!.id);
+        setState(() {
+          _isFavorite = false;
+        });
+        _showMessage('${_game!.name} removido de favoritos', Colors.orange);
+      } else {
+        await _gameStorage.addFavorite(_game!);
+        setState(() {
+          _isFavorite = true;
+        });
+        _showMessage('${_game!.name} agregado a favoritos', Colors.green);
+      }
+
+      // Animar botón
+      await _fabAnimationController.reverse();
+      await Future.delayed(const Duration(milliseconds: 100));
+      await _fabAnimationController.forward();
+    } catch (e) {
+      _showMessage('Error: $e', Colors.red);
+    }
+  }
+
+  /// Muestra un mensaje temporal
+  void _showMessage(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _fabAnimationController.dispose();
+    _scrollController.dispose();
+    _apiService.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_game?.name ?? 'Cargando...'),
+        elevation: 0,
+        backgroundColor: const Color(
+          0xFF1E3C72,
+        ).withOpacity(_appBarOpacity > 0.5 ? 1 : 0.5),
+      ),
+      body: _isLoading
+          ? const game_widgets.LoadingWidget(
+              message: 'Cargando detalles del juego...',
+            )
+          : _game == null
+          ? game_widgets.ErrorWidget(
+              errorMessage: 'No se encontró el juego',
+              onRetry: _loadGameDetails,
+            )
+          : SingleChildScrollView(
+              controller: _scrollController,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ========== IMAGEN GRANDE ==========
+                  SizedBox(
+                    width: double.infinity,
+                    height: 250,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Imagen de fondo
+                        _game!.imageUrl.isNotEmpty
+                            ? Image.network(
+                                _game!.imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stack) {
+                                  return Container(
+                                    color: Colors.grey[800],
+                                    child: const Icon(
+                                      Icons.broken_image,
+                                      size: 80,
+                                      color: Colors.grey,
+                                    ),
+                                  );
+                                },
+                              )
+                            : Container(
+                                color: Colors.grey[800],
+                                child: const Icon(
+                                  Icons.sports_esports,
+                                  size: 80,
+                                  color: Colors.grey,
+                                ),
+                              ),
+
+                        // Overlay oscuro
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.transparent, Colors.black87],
+                            ),
+                          ),
+                        ),
+
+                        // Información overlay
+                        Positioned(
+                          bottom: 16,
+                          left: 16,
+                          right: 16,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Calificación
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00D9FF),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.star,
+                                      color: Colors.black,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _game!.rating.toStringAsFixed(1),
+                                      style: const TextStyle(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // Año de lanzamiento
+                              Text(
+                                'Lanzamiento: ${_game!.releaseYear}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[300],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ========== CONTENIDO PRINCIPAL ==========
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Nombre del juego
+                        Text(
+                          _game!.name,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        // Géneros
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: _game!.genres
+                                .split(', ')
+                                .map(
+                                  (genre) => Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: Chip(
+                                      label: Text(
+                                        genre,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                      backgroundColor: const Color(0xFF00D9FF),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Descripción
+                        Text(
+                          'Descripción',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(color: const Color(0xFF00D9FF)),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Text(
+                          _game!.description,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[300],
+                            height: 1.5,
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Estadísticas
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[900],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Información General',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(color: const Color(0xFF00D9FF)),
+                              ),
+                              const SizedBox(height: 12),
+                              _buildInfoRow(
+                                'Calificación',
+                                '${_game!.rating}/5.0',
+                              ),
+                              const SizedBox(height: 8),
+                              _buildInfoRow('Año', '${_game!.releaseYear}'),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Botones de acción
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _toggleFavorite,
+                                icon: Icon(
+                                  _isFavorite
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                ),
+                                label: Text(
+                                  _isFavorite
+                                      ? 'Favorito'
+                                      : 'Agregar a Favoritos',
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _isFavorite
+                                      ? Colors.red
+                                      : const Color(0xFF00D9FF),
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  /// Construye una fila de información
+  Widget _buildInfoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 14)),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Color(0xFF00D9FF),
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+      ],
+    );
+  }
+}

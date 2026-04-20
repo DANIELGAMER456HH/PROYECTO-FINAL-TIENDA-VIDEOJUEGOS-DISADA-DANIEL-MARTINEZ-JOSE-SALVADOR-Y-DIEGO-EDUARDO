@@ -1,0 +1,470 @@
+import 'package:flutter/material.dart';
+import 'package:game_vault/models/game.dart';
+import 'package:game_vault/services/api_service.dart';
+import 'package:game_vault/services/game_storage.dart';
+import 'package:game_vault/widgets/game_card.dart';
+
+/// Pantalla que muestra una lista de videojuegos con búsqueda y filtros
+///
+/// Características:
+/// - GridView de juegos (2 columnas)
+/// - Búsqueda en tiempo real
+/// - Paginación infinita
+/// - Ordenamiento por calificación
+/// - Marcar/desmarcar favoritos
+class GamesListScreen extends StatefulWidget {
+  const GamesListScreen({Key? key}) : super(key: key);
+
+  @override
+  State<GamesListScreen> createState() => _GamesListScreenState();
+}
+
+class _GamesListScreenState extends State<GamesListScreen> {
+  /// Servicio de API
+  final ApiService _apiService = ApiService();
+
+  /// Servicio de almacenamiento
+  final GameStorage _gameStorage = GameStorage();
+
+  /// Controlador de búsqueda
+  late TextEditingController _searchController;
+
+  /// Lista de juegos mostrados
+  List<Game> _games = [];
+
+  /// Lista de juegos favoritos (para verificación rápida)
+  List<int> _favoriteIds = [];
+
+  /// Página actual para paginación
+  int _currentPage = 1;
+
+  /// Indicador de carga
+  bool _isLoading = false;
+
+  /// Indicador de carga de más
+  bool _isLoadingMore = false;
+
+  /// Hay más juegos disponibles
+  bool _hasMoreGames = true;
+
+  /// Modo de búsqueda activado
+  bool _isSearching = false;
+
+  /// Resultados de búsqueda
+  List<Game> _searchResults = [];
+
+  // ========== LISTA DE 100 JUEGOS PREDETERMINADA ==========
+  static const List<Map<String, String>> _defaultGames = [
+    // Acción y Aventura
+    {
+      'name': 'The Legend of Zelda: Ocarina of Time',
+      'category': 'Acción y Aventura',
+    },
+    {'name': 'The Last of Us', 'category': 'Acción y Aventura'},
+    {'name': 'Grand Theft Auto V', 'category': 'Acción y Aventura'},
+    {'name': 'Red Dead Redemption 2', 'category': 'Acción y Aventura'},
+    {'name': 'God of War (2018)', 'category': 'Acción y Aventura'},
+    {'name': 'Super Mario Odyssey', 'category': 'Acción y Aventura'},
+    {'name': 'Tomb Raider (2013)', 'category': 'Acción y Aventura'},
+    {'name': 'Batman: Arkham City', 'category': 'Acción y Aventura'},
+    {'name': 'Uncharted 4: A Thief\'s End', 'category': 'Acción y Aventura'},
+    {'name': 'Horizon Zero Dawn', 'category': 'Acción y Aventura'},
+    // Juegos de Rol (RPG)
+    {'name': 'The Witcher 3: Wild Hunt', 'category': 'Juegos de Rol (RPG)'},
+    {'name': 'Final Fantasy VII', 'category': 'Juegos de Rol (RPG)'},
+    {'name': 'The Elder Scrolls V: Skyrim', 'category': 'Juegos de Rol (RPG)'},
+    {'name': 'Mass Effect 2', 'category': 'Juegos de Rol (RPG)'},
+    {'name': 'Persona 5 Royal', 'category': 'Juegos de Rol (RPG)'},
+    {'name': 'Chrono Trigger', 'category': 'Juegos de Rol (RPG)'},
+    {'name': 'Dark Souls', 'category': 'Juegos de Rol (RPG)'},
+    {'name': 'Fallout: New Vegas', 'category': 'Juegos de Rol (RPG)'},
+    {'name': 'Baldur\'s Gate 3', 'category': 'Juegos de Rol (RPG)'},
+    {'name': 'Cyberpunk 2077', 'category': 'Juegos de Rol (RPG)'},
+    // Disparos (Shooters)
+    {'name': 'DOOM (1993)', 'category': 'Disparos (Shooters)'},
+    {'name': 'Half-Life 2', 'category': 'Disparos (Shooters)'},
+    {'name': 'Halo: Combat Evolved', 'category': 'Disparos (Shooters)'},
+    {
+      'name': 'Call of Duty: Modern Warfare 2',
+      'category': 'Disparos (Shooters)',
+    },
+    {'name': 'Overwatch', 'category': 'Disparos (Shooters)'},
+    {'name': 'BioShock', 'category': 'Disparos (Shooters)'},
+    {'name': 'Destiny 2', 'category': 'Disparos (Shooters)'},
+    {
+      'name': 'Counter-Strike: Global Offensive (CS:GO)',
+      'category': 'Disparos (Shooters)',
+    },
+    {'name': 'GoldenEye 007', 'category': 'Disparos (Shooters)'},
+    {'name': 'Gears of War', 'category': 'Disparos (Shooters)'},
+    // Plataformas
+    {'name': 'Super Mario Bros.', 'category': 'Plataformas'},
+    {'name': 'Sonic the Hedgehog', 'category': 'Plataformas'},
+    {'name': 'Donkey Kong Country', 'category': 'Plataformas'},
+    {'name': 'Crash Bandicoot', 'category': 'Plataformas'},
+    {'name': 'Celeste', 'category': 'Plataformas'},
+    {'name': 'Hollow Knight', 'category': 'Plataformas'},
+    {'name': 'Super Mario 64', 'category': 'Plataformas'},
+    {'name': 'Rayman Legends', 'category': 'Plataformas'},
+    {'name': 'Mega Man 2', 'category': 'Plataformas'},
+    {'name': 'Ori and the Blind Forest', 'category': 'Plataformas'},
+    // Estrategia y Simulación
+    {'name': 'Age of Empires II', 'category': 'Estrategia y Simulación'},
+    {'name': 'StarCraft', 'category': 'Estrategia y Simulación'},
+    {'name': 'Civilization VI', 'category': 'Estrategia y Simulación'},
+    {'name': 'The Sims 4', 'category': 'Estrategia y Simulación'},
+    {'name': 'SimCity', 'category': 'Estrategia y Simulación'},
+    {'name': 'XCOM: Enemy Unknown', 'category': 'Estrategia y Simulación'},
+    {'name': 'RollerCoaster Tycoon', 'category': 'Estrategia y Simulación'},
+    {'name': 'Stardew Valley', 'category': 'Estrategia y Simulación'},
+    {
+      'name': 'Animal Crossing: New Horizons',
+      'category': 'Estrategia y Simulación',
+    },
+    {'name': 'Crusader Kings III', 'category': 'Estrategia y Simulación'},
+    // Deportes y Carreras
+    {
+      'name': 'EA Sports FC 24 (anteriormente FIFA)',
+      'category': 'Deportes y Carreras',
+    },
+    {'name': 'Mario Kart 8 Deluxe', 'category': 'Deportes y Carreras'},
+    {'name': 'Forza Horizon 5', 'category': 'Deportes y Carreras'},
+    {'name': 'Gran Turismo 7', 'category': 'Deportes y Carreras'},
+    {'name': 'Rocket League', 'category': 'Deportes y Carreras'},
+    {'name': 'Tony Hawk\'s Pro Skater 2', 'category': 'Deportes y Carreras'},
+    {'name': 'NBA 2K23', 'category': 'Deportes y Carreras'},
+    {'name': 'Need for Speed: Most Wanted', 'category': 'Deportes y Carreras'},
+    {'name': 'Wii Sports', 'category': 'Deportes y Carreras'},
+    {'name': 'SSX Tricky', 'category': 'Deportes y Carreras'},
+    // Lucha (Fighting)
+    {'name': 'Street Fighter II', 'category': 'Lucha (Fighting)'},
+    {'name': 'Super Smash Bros. Ultimate', 'category': 'Lucha (Fighting)'},
+    {'name': 'Mortal Kombat 11', 'category': 'Lucha (Fighting)'},
+    {'name': 'Tekken 3', 'category': 'Lucha (Fighting)'},
+    {'name': 'Dragon Ball FighterZ', 'category': 'Lucha (Fighting)'},
+    {'name': 'Soulcalibur', 'category': 'Lucha (Fighting)'},
+    {'name': 'Injustice 2', 'category': 'Lucha (Fighting)'},
+    {'name': 'Marvel vs. Capcom 2', 'category': 'Lucha (Fighting)'},
+    {'name': 'Guilty Gear Strive', 'category': 'Lucha (Fighting)'},
+    {'name': 'The King of Fighters \'98', 'category': 'Lucha (Fighting)'},
+    // Indies y Roguelikes
+    {'name': 'Hades', 'category': 'Indies y Roguelikes'},
+    {'name': 'Undertale', 'category': 'Indies y Roguelikes'},
+    {'name': 'Minecraft', 'category': 'Indies y Roguelikes'},
+    {'name': 'Terraria', 'category': 'Indies y Roguelikes'},
+    {'name': 'Dead Cells', 'category': 'Indies y Roguelikes'},
+    {'name': 'Spelunky', 'category': 'Indies y Roguelikes'},
+    {'name': 'The Binding of Isaac', 'category': 'Indies y Roguelikes'},
+    {'name': 'Cuphead', 'category': 'Indies y Roguelikes'},
+    {'name': 'Shovel Knight', 'category': 'Indies y Roguelikes'},
+    {'name': 'Slay the Spire', 'category': 'Indies y Roguelikes'},
+    // Terror y Supervivencia
+    {'name': 'Resident Evil 4', 'category': 'Terror y Supervivencia'},
+    {'name': 'Silent Hill 2', 'category': 'Terror y Supervivencia'},
+    {'name': 'Amnesia: The Dark Descent', 'category': 'Terror y Supervivencia'},
+    {'name': 'Dead Space', 'category': 'Terror y Supervivencia'},
+    {'name': 'Outlast', 'category': 'Terror y Supervivencia'},
+    {'name': 'Alien: Isolation', 'category': 'Terror y Supervivencia'},
+    {'name': 'The Evil Within', 'category': 'Terror y Supervivencia'},
+    {'name': 'Five Nights at Freddy\'s', 'category': 'Terror y Supervivencia'},
+    {'name': 'Resident Evil 2 Remake', 'category': 'Terror y Supervivencia'},
+    {'name': 'Phasmophobia', 'category': 'Terror y Supervivencia'},
+    // Puzles y Familiares
+    {'name': 'Tetris', 'category': 'Puzles y Familiares'},
+    {'name': 'Portal 2', 'category': 'Puzles y Familiares'},
+    {'name': 'Pac-Man', 'category': 'Puzles y Familiares'},
+    {'name': 'Among Us', 'category': 'Puzles y Familiares'},
+    {'name': 'Fall Guys', 'category': 'Puzles y Familiares'},
+    {'name': 'Overcooked! 2', 'category': 'Puzles y Familiares'},
+    {'name': 'Mario Party Superstars', 'category': 'Puzles y Familiares'},
+    {'name': 'Candy Crush Saga', 'category': 'Puzles y Familiares'},
+    {'name': 'Bejeweled', 'category': 'Puzles y Familiares'},
+    {'name': 'The Witness', 'category': 'Puzles y Familiares'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    _searchController = TextEditingController();
+    _searchController.addListener(_onSearchChanged);
+
+    _initializeStorage();
+    _loadGames();
+  }
+
+  /// Inicializa el almacenamiento
+  Future<void> _initializeStorage() async {
+    try {
+      await _gameStorage.init();
+
+      // Cargar IDs de favoritos
+      final favorites = await _gameStorage.getFavoritesGames();
+      setState(() {
+        _favoriteIds = favorites.map((g) => g.id).toList();
+      });
+    } catch (e) {
+      print('❌ Error inicializando almacenamiento: $e');
+    }
+  }
+
+  /// Carga los juegos iniciales
+  Future<void> _loadGames() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final games = await _apiService.getPopularGames(
+        page: _currentPage,
+        pageSize: 20,
+      );
+
+      setState(() {
+        if (_currentPage == 1) {
+          _games = games;
+        } else {
+          _games.addAll(games);
+        }
+
+        _hasMoreGames = games.length == 20;
+        _isLoading = false;
+      });
+
+      // Guardar en historial
+      for (var game in games.take(5)) {
+        await _gameStorage.addToHistory(game);
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      _showErrorSnackBar('Error cargando juegos: $e');
+    }
+  }
+
+  /// Carga más juegos (paginación)
+  void _loadMoreGames() {
+    if (_isLoadingMore || !_hasMoreGames) return;
+
+    setState(() {
+      _isLoadingMore = true;
+      _currentPage++;
+    });
+
+    _loadGames();
+
+    setState(() {
+      _isLoadingMore = false;
+    });
+  }
+
+  /// Manejador de cambios en la búsqueda
+  void _onSearchChanged() {
+    final query = _searchController.text.trim();
+
+    if (query.isEmpty) {
+      setState(() {
+        _isSearching = false;
+        _searchResults = [];
+        _currentPage = 1;
+      });
+      _loadGames();
+      return;
+    }
+
+    setState(() {
+      _isSearching = true;
+    });
+
+    _performSearch(query);
+  }
+
+  /// Realiza la búsqueda
+  Future<void> _performSearch(String query) async {
+    try {
+      final results = await _apiService.searchGames(query);
+
+      setState(() {
+        _searchResults = results;
+      });
+    } catch (e) {
+      _showErrorSnackBar('Error en la búsqueda: $e');
+    }
+  }
+
+  /// Maneja el cambio de favorito
+  Future<void> _toggleFavorite(Game game, bool isFavorite) async {
+    try {
+      if (isFavorite) {
+        await _gameStorage.addFavorite(game);
+        setState(() {
+          _favoriteIds.add(game.id);
+        });
+        _showSuccessSnackBar('${game.name} agregado a favoritos ⭐');
+      } else {
+        await _gameStorage.removeFavorite(game.id);
+        setState(() {
+          _favoriteIds.remove(game.id);
+        });
+        _showSuccessSnackBar('${game.name} removido de favoritos');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error: $e');
+    }
+  }
+
+  /// Muestra un mensaje de éxito
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green[700],
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Muestra un mensaje de error
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red[700],
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _apiService.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final gamesToShow = _isSearching ? _searchResults : _games;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('🎮 Explorar Juegos'),
+        elevation: 0,
+        actions: [
+          if (!_isSearching)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Tooltip(
+                message: 'Actualizar',
+                child: IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () {
+                    _currentPage = 1;
+                    _loadGames();
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // ========== BÚSQUEDA ==========
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchController,
+              cursorColor: const Color(0xFF00D9FF),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Buscar juegos...',
+                hintStyle: TextStyle(color: Colors.grey[500]),
+                prefixIcon: const Icon(Icons.search, color: Color(0xFF00D9FF)),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Color(0xFF00D9FF)),
+                        onPressed: () {
+                          _searchController.clear();
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: Colors.grey[900],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF00D9FF)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF00D9FF),
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ========== LISTA DE JUEGOS ==========
+          Expanded(
+            child: _isLoading && gamesToShow.isEmpty
+                ? const LoadingWidget(message: 'Cargando juegos...')
+                : gamesToShow.isEmpty
+                ? EmptyStateWidget(
+                    title: _isSearching
+                        ? 'Sin resultados'
+                        : 'Sin juegos disponibles',
+                    message: _isSearching
+                        ? 'No encontramos juegos que coincidan'
+                        : 'No hay juegos para mostrar',
+                    icon: _isSearching
+                        ? Icons.search_off
+                        : Icons.inbox_outlined,
+                  )
+                : GridView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.6,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                    itemCount:
+                        gamesToShow.length +
+                        (_hasMoreGames && !_isSearching ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      // Widget de carga en la última posición
+                      if (index == gamesToShow.length) {
+                        _loadMoreGames();
+                        return const LoadingWidget(message: 'Cargando más...');
+                      }
+
+                      final game = gamesToShow[index];
+                      final isFavorite = _favoriteIds.contains(game.id);
+
+                      return GameCard(
+                        game: game.copyWith(isFavorite: isFavorite),
+                        onTap: () {
+                          Navigator.pushNamed(
+                            context,
+                            '/game-detail',
+                            arguments: game.id,
+                          );
+                        },
+                        onFavoriteToggle: (newState) {
+                          _toggleFavorite(game, newState);
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
